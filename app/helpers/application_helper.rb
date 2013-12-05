@@ -134,14 +134,22 @@ module ApplicationHelper
   #
   def link_to_project(project, options={}, html_options = nil)
     if project.archived?
-      h(project.name)
+      h(prefixed_project_name(project))
     elsif options.key?(:action)
       ActiveSupport::Deprecation.warn "#link_to_project with :action option is deprecated and will be removed in Redmine 3.0."
       url = {:controller => 'projects', :action => 'show', :id => project}.merge(options)
-      link_to project.name, url, html_options
+      link_to prefixed_project_name(project), url, html_options
     else
-      link_to project.name, project_path(project, options), html_options
+      link_to prefixed_project_name(project), project_path(project, options), html_options
     end
+  end
+
+  def prefixed_project_name(project)
+   if project.is_public
+     return "[O] #{project.name}"
+   else
+     return project.name
+   end
   end
 
   # Generates a link to a project settings if active

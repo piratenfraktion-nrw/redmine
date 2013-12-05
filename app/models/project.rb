@@ -538,7 +538,11 @@ class Project < ActiveRecord::Base
   end
 
   def to_s
-    name
+    if is_public
+      return "[O] #{name}"
+    else
+      return name
+    end
   end
 
   # Returns a short description of the projects (first lines)

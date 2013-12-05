@@ -311,6 +311,31 @@ class Mailer < ActionMailer::Base
       :subject => 'Redmine test'
   end
 
+  # Overrides default deliver! method to prevent from sending an email
+  # with no recipient, cc or bcc
+  def deliver!(mail = @mail)
+    set_language_if_valid @initial_language
+    return false if (recipients.nil? || recipients.empty?) &&
+                    (cc.nil? || cc.empty?) &&
+                    (bcc.nil? || bcc.empty?)
+
+
+    # Log errors when raise_delivery_errors is set to false, Rails does not
+    raise_errors = self.class.raise_delivery_errors
+    self.class.raise_delivery_errors = true
+    begin
+      return super(mail)
+    rescue Exception => e
+      if raise_errors
+        raise e
+      elsif mylogger
+        mylogger.error "The following error occured while sending email notification: \"#{e.message}\". Check your configuration in config/configuration.yml."
+      end
+    ensure
+      self.class.raise_delivery_errors = raise_errors
+    end
+  end
+
   # Sends reminders to issue assignees
   # Available options:
   # * :days     => how many days in the future to remind about (defaults to 7)
@@ -368,14 +393,24 @@ class Mailer < ActionMailer::Base
     ActionMailer::Base.delivery_method = saved_method
   end
 
-  def mail(headers={}, &block)
-    headers.merge! 'X-Mailer' => 'Redmine',
-            'X-Redmine-Host' => Setting.host_name,
-            'X-Redmine-Site' => Setting.app_title,
-            'X-Auto-Response-Suppress' => 'OOF',
-            'Auto-Submitted' => 'auto-generated',
-            'From' => Setting.mail_from,
-            'List-Id' => "<#{Setting.mail_from.to_s.gsub('@', '.')}>"
+  def mail(headers={})
+    if @author && @author.logged?
+      headers.merge! 'X-Mailer' => 'Redmine',
+        'X-Redmine-Host' => Setting.host_name,
+        'X-Redmine-Site' => Setting.app_title,
+        'X-Auto-Response-Suppress' => 'OOF',
+        'Auto-Submitted' => 'auto-generated',
+        'From' => "#{@author.name} <#{Setting.mail_from}>",
+        'List-Id' => "<#{Setting.mail_from.to_s.gsub('@', '.')}>"
+    else
+      headers.merge! 'X-Mailer' => 'Redmine',
+        'X-Redmine-Host' => Setting.host_name,
+        'X-Redmine-Site' => Setting.app_title,
+        'X-Auto-Response-Suppress' => 'OOF',
+        'Auto-Submitted' => 'auto-generated',
+        'From' => Setting.mail_from,
+        'List-Id' => "<#{Setting.mail_from.to_s.gsub('@', '.')}>"
+    end
 
     # Removes the author from the recipients and cc
     # if the author does not want to receive notifications
